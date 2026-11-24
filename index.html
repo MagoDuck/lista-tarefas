@@ -28,7 +28,8 @@
     <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
     <symbol id="i-sort" viewBox="0 0 24 24"><path d="M4 7h16M4 12h11M4 17h6"/></symbol>
     <symbol id="i-az" viewBox="0 0 24 24"><path d="M3 18l3.5-10L10 18M4.3 15h4.4M13 8h7l-7 10h7"/></symbol>
-    <symbol id="i-chevron"viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 21h4"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
     <symbol id="i-plus"viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></symbol>
@@ -194,6 +195,11 @@
           </select>
         </div>
       </div>
+      <label class="field">
+        <span>Lembrete</span>
+        <input name="remindAt" type="datetime-local">
+        <small class="hint">Você recebe uma notificação neste horário, mesmo com o app fechado.</small>
+      </label>
       <div class="field">
         <span>Lista</span>
         <select name="listId" aria-label="Lista"></select>

@@ -1,0 +1,14 @@
+{
+  "name": "lista-tarefas",
+  "private": true,
+  "description": "PWA de listas de tarefas com lembretes por notificação push (Vercel + TiDB + cron-job.org)",
+  "scripts": {
+    "dev": "node serve.js 5510",
+    "icons": "node scripts/generate-icons.js",
+    "vapid": "web-push generate-vapid-keys"
+  },
+  "dependencies": {
+    "mysql2": "^3.11.0",
+    "web-push": "^3.6.7"
+  }
+}

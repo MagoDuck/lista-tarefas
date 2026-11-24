@@ -25,6 +25,11 @@
     const [y, m, d] = iso.split('-').map(Number);
     return new Date(y, m - 1, d);
   }
+  /** ISO (UTC) → valor de <input type="datetime-local"> no fuso do aparelho. */
+  function toLocalInput(iso) {
+    const d = new Date(iso);
+    return `${localISO(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
   function addDays(iso, n) {
     const d = parseISO(iso);
     d.setDate(d.getDate() + n);
@@ -179,7 +184,7 @@
   /* ================== Estado ================== */
   function makeTask(listId, title, extra = {}) {
     return {
-      id: uid(), listId, title, notes: '', done: false, due: '', priority: 0,
+      id: uid(), listId, title, notes: '', done: false, due: '', remindAt: '', priority: 0,
       createdAt: Date.now(), completedAt: null, ...extra,
     };
   }
@@ -225,6 +230,7 @@
         notes: String(t.notes || '').slice(0, 2000),
         done: !!t.done,
         due: /^\d{4}-\d{2}-\d{2}$/.test(t.due || '') ? t.due : '',
+        remindAt: typeof t.remindAt === 'string' && !Number.isNaN(Date.parse(t.remindAt)) ? t.remindAt : '',
         priority: [0, 1, 2, 3].includes(Number(t.priority)) ? Number(t.priority) : 0,
         createdAt: Number(t.createdAt) || Date.now(),
         completedAt: t.completedAt ? Number(t.completedAt) : null,
@@ -263,7 +269,7 @@
     }
   }
 
-  function commit() { save(); render(); }
+  function commit() { save(); render(); scheduleReminderSync(); }
 
   const getList = (id) => state.lists.find((l) => l.id === id) || null;
   const getTask = (id) => state.tasks.find((t) => t.id === id) || null;
@@ -419,6 +425,16 @@
     if (task.priority) {
       meta.append(el('span', { class: `meta-item p${task.priority}` }, svgIcon('i-flag'), PRIORITY_LABEL[task.priority]));
     }
+    if (task.remindAt && !task.done) {
+      const at = new Date(task.remindAt);
+      const day = localISO(at);
+      const time = at.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const today = localISO();
+      const dayText = day === today ? 'Hoje' : day === addDays(today, 1) ? 'Amanhã' : fmtShort.format(at).replace('.', '');
+      const past = at.getTime() <= Date.now();
+      meta.append(el('span', { class: 'meta-item' + (past ? '' : ' reminder'), title: past ? 'Lembrete enviado' : 'Lembrete' },
+        svgIcon('i-bell'), `${dayText}, ${time}`));
+    }
     if (task.notes) {
       meta.append(el('span', { class: 'meta-item notes-preview', title: task.notes }, svgIcon('i-note'), task.notes.split('\n')[0]));
     }
@@ -538,6 +554,7 @@
     f.title.value = t.title;
     f.notes.value = t.notes;
     f.due.value = t.due;
+    f.remindAt.value = t.remindAt ? toLocalInput(t.remindAt) : '';
     f.priority.value = String(t.priority);
     f.listId.replaceChildren(...state.lists.map((l) => el('option', { value: l.id, text: l.name, 'data-dot': l.color })));
     f.listId.value = t.listId;
@@ -552,6 +569,9 @@
       if (title) t.title = title;
       t.notes = f.notes.value.trim();
       t.due = f.due.value;
+      // "AAAA-MM-DDTHH:MM" é interpretado no fuso do aparelho; guardamos em ISO (UTC).
+      const remind = f.remindAt.value ? new Date(f.remindAt.value) : null;
+      t.remindAt = remind && !Number.isNaN(remind.getTime()) ? remind.toISOString() : '';
       t.priority = Number(f.priority.value);
       if (getList(f.listId.value)) t.listId = f.listId.value;
       commit();
@@ -763,6 +783,156 @@
     }
   });
 
+  /* ================== Lembretes (notificações push) ==================
+   * As tarefas ficam só neste aparelho. Para avisar com o app fechado, enviamos ao
+   * servidor (/api/reminders) apenas o título, o nome da lista e o horário de cada
+   * lembrete futuro. O cron-job.org chama /api/cron a cada minuto, que dispara o push.
+   * O app compara o que deveria estar no servidor com o que já foi enviado e
+   * manda só as diferenças — inclusive quando volta a ficar online. */
+  const SYNC_KEY = 'tarefas:lembretes';
+  const pushSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  let pushConfig; // undefined = ainda não buscado · null = servidor sem notificações
+  let syncTimer = 0;
+  let syncing = false;
+  let syncAgain = false;
+  let warnedUnavailable = false;
+
+  function readSynced() {
+    try {
+      const s = JSON.parse(localStorage.getItem(SYNC_KEY));
+      if (s && typeof s === 'object' && s.items) return s;
+    } catch (e) { /* ignora */ }
+    return { endpoint: '', key: '', items: {} };
+  }
+  function writeSynced(s) {
+    try { localStorage.setItem(SYNC_KEY, JSON.stringify(s)); } catch (e) { /* ignora */ }
+  }
+
+  function desiredReminders() {
+    const now = Date.now();
+    const out = {};
+    for (const t of state.tasks) {
+      if (!t.remindAt || t.done) continue;
+      const at = Date.parse(t.remindAt);
+      if (at > now) out[t.id] = { at, title: t.title, body: getList(t.listId)?.name || '' };
+    }
+    return out;
+  }
+
+  async function getPushConfig() {
+    if (pushConfig !== undefined) return pushConfig;
+    let res;
+    try { res = await fetch('api/config', { cache: 'no-store' }); } catch (e) { return null; } // offline: tenta depois
+    try { pushConfig = res.ok ? await res.json() : null; } catch (e) { pushConfig = null; }
+    if (!pushConfig || !pushConfig.vapidPublicKey) pushConfig = null;
+    return pushConfig;
+  }
+
+  function base64UrlToBytes(b64) {
+    const pad = '='.repeat((4 - (b64.length % 4)) % 4);
+    const bin = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  }
+
+  async function reminderApi(method, payload) {
+    const res = await fetch('api/reminders', {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(`api/reminders ${res.status}`);
+  }
+
+  function scheduleReminderSync(delay = 800) {
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(syncReminders, delay);
+  }
+
+  async function syncReminders() {
+    if (syncing) { syncAgain = true; return; }
+    syncing = true;
+    try {
+      const desired = desiredReminders();
+      let synced = readSynced();
+      const wantsAny = Object.keys(desired).length > 0;
+      if (!wantsAny && !Object.keys(synced.items).length) return;
+      if (!pushSupported) return;
+
+      const config = await getPushConfig();
+      if (!config) {
+        if (wantsAny && pushConfig === null && !warnedUnavailable) {
+          warnedUnavailable = true;
+          toast('Lembretes indisponíveis: o servidor de notificações não está configurado.');
+        }
+        return;
+      }
+
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      // Chave do servidor mudou: a inscrição antiga não serve mais.
+      if (sub && synced.key && synced.key !== config.vapidPublicKey) {
+        await sub.unsubscribe().catch(() => {});
+        sub = null;
+      }
+      if (!sub && wantsAny && Notification.permission === 'granted') {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: base64UrlToBytes(config.vapidPublicKey),
+        });
+      }
+      if (!sub) return;
+      if (synced.endpoint !== sub.endpoint || synced.key !== config.vapidPublicKey) {
+        synced = { endpoint: sub.endpoint, key: config.vapidPublicKey, items: {} };
+        writeSynced(synced);
+      }
+
+      for (const id of Object.keys(synced.items)) {
+        if (desired[id]) continue;
+        await reminderApi('DELETE', { endpoint: sub.endpoint, taskId: id });
+        delete synced.items[id];
+        writeSynced(synced);
+      }
+      const subscription = sub.toJSON();
+      for (const [id, r] of Object.entries(desired)) {
+        const prev = synced.items[id];
+        if (prev && prev.at === r.at && prev.title === r.title && prev.body === r.body) continue;
+        await reminderApi('POST', { subscription, taskId: id, title: r.title, body: r.body, remindAt: r.at });
+        synced.items[id] = r;
+        writeSynced(synced);
+      }
+    } catch (err) {
+      console.warn('Lembretes: não foi possível sincronizar agora.', err);
+    } finally {
+      syncing = false;
+      if (syncAgain) { syncAgain = false; scheduleReminderSync(); }
+    }
+  }
+
+  async function askNotificationPermission() {
+    if (!pushSupported) {
+      toast(isIOS
+        ? 'No iPhone, adicione o app à Tela de Início para receber lembretes.'
+        : 'Este navegador não permite notificações.', null, null, 7000);
+      return;
+    }
+    if (Notification.permission === 'granted') return;
+    if (Notification.permission === 'denied') {
+      toast('As notificações estão bloqueadas nas configurações do navegador.', null, null, 7000);
+      return;
+    }
+    const result = await Notification.requestPermission();
+    if (result === 'granted') scheduleReminderSync(0);
+    else toast('Sem permissão de notificação, o lembrete não será enviado.', null, null, 7000);
+  }
+
+  // O pedido de permissão precisa partir de um clique do usuário.
+  $('#task-form button[value="save"]').addEventListener('click', () => {
+    if (taskForm.elements.remindAt.value) askNotificationPermission();
+  });
+
+  window.addEventListener('online', () => scheduleReminderSync(0));
+
   /* ================== PWA: instalação e service worker ================== */
   let deferredPrompt = null;
   const installBtn = $('#install-btn');
@@ -818,4 +988,5 @@
   }
   save();
   render();
+  scheduleReminderSync(2000);
 })();
