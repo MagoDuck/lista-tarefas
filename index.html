@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tarefas</title>
+  <meta name="description" content="Crie listas de coisas para fazer. Funciona offline e pode ser instalado como app.">
+  <meta name="theme-color" content="#4f46e5">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Tarefas">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="stylesheet" href="css/style.css">
+  <script>
+    // Aplica o tema salvo antes da primeira pintura (evita "piscar").
+    try {
+      var s = JSON.parse(localStorage.getItem('tarefas:v1') || '{}');
+      if (s.theme === 'light' || s.theme === 'dark') document.documentElement.dataset.theme = s.theme;
+    } catch (e) {}
+  </script>
+</head>
+<body>
+  <!-- Ícones -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></symbol>
+    <symbol id="i-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4v16a8 8 0 0 0 0-16z" fill="currentColor"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><path d="M6 4h9l4 4v12H6zM9 12h7M9 16h5"/></symbol>
+    <symbol id="i-today" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/><circle cx="12" cy="15" r="1.6" fill="currentColor"/></symbol>
+    <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M4 13l2.5-8h11L20 13v6H4zM4 13h5l1 2h4l1-2h5"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5M5 20h14"/></symbol>
+    <symbol id="i-install" viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M12 7v7M9 11l3 3 3-3"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+    <symbol id="i-broom" viewBox="0 0 24 24"><path d="M14 4l6 6M16 6l-5.5 5.5M4 20c1-4 3-7 6.5-8.5l2 2C11 17 8 19 4 20z"/></symbol>
+  </svg>
+
+  <div class="app">
+    <aside class="sidebar" id="sidebar" aria-label="Listas">
+      <div class="brand">
+        <img src="icons/icon.svg" alt="" width="32" height="32">
+        <span>Tarefas</span>
+      </div>
+
+      <nav class="nav" id="nav">
+        <button class="nav-item" data-view="today">
+          <svg class="ico"><use href="#i-today"/></svg><span class="nav-label">Hoje</span><span class="count" data-count="today"></span>
+        </button>
+        <button class="nav-item" data-view="all">
+          <svg class="ico"><use href="#i-inbox"/></svg><span class="nav-label">Todas as tarefas</span><span class="count" data-count="all"></span>
+        </button>
+
+        <h2 class="nav-heading">Minhas listas</h2>
+        <ul class="lists" id="lists"></ul>
+
+        <button class="nav-item add-list" id="new-list-btn">
+          <svg class="ico"><use href="#i-plus"/></svg><span class="nav-label">Nova lista</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="ghost-btn" id="install-btn" hidden>
+          <svg class="ico"><use href="#i-install"/></svg>Instalar app
+        </button>
+        <button class="ghost-btn" id="theme-btn">
+          <svg class="ico"><use href="#i-auto"/></svg><span>Tema: automático</span>
+        </button>
+        <div class="footer-row">
+          <button class="ghost-btn" id="export-btn" title="Salvar backup das tarefas">
+            <svg class="ico"><use href="#i-download"/></svg>Exportar
+          </button>
+          <button class="ghost-btn" id="import-btn" title="Restaurar backup">
+            <svg class="ico"><use href="#i-upload"/></svg>Importar
+          </button>
+        </div>
+        <input type="file" id="import-file" accept="application/json,.json" hidden>
+      </div>
+    </aside>
+    <div class="scrim" id="scrim"></div>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-btn menu-btn" id="menu-btn" aria-label="Abrir listas" aria-controls="sidebar" aria-expanded="false">
+          <svg class="ico"><use href="#i-menu"/></svg>
+        </button>
+        <span class="view-dot" id="view-dot"></span>
+        <div class="title-wrap">
+          <h1 id="view-title">Tarefas</h1>
+          <p id="view-sub" class="sub"></p>
+        </div>
+        <div class="list-actions" id="list-actions">
+          <button class="icon-btn" id="rename-list-btn" aria-label="Editar lista" title="Editar lista">
+            <svg class="ico"><use href="#i-edit"/></svg>
+          </button>
+          <button class="icon-btn danger" id="delete-list-btn" aria-label="Excluir lista" title="Excluir lista">
+            <svg class="ico"><use href="#i-trash"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="progress" aria-hidden="true"><div class="progress-bar" id="progress-bar"></div></div>
+
+      <form class="add-form" id="add-form" autocomplete="off">
+        <svg class="ico add-ico"><use href="#i-plus"/></svg>
+        <input id="new-title" class="add-input" type="text" placeholder="Adicionar uma tarefa…" maxlength="200" aria-label="Nova tarefa" enterkeyhint="done">
+        <div class="add-extras">
+          <label class="chip-input" title="Data">
+            <svg class="ico"><use href="#i-calendar"/></svg>
+            <input id="new-due" type="date" aria-label="Data">
+          </label>
+          <label class="chip-input" title="Prioridade">
+            <svg class="ico"><use href="#i-flag"/></svg>
+            <select id="new-priority" aria-label="Prioridade">
+              <option value="0">Sem prioridade</option>
+              <option value="1">Baixa</option>
+              <option value="2">Média</option>
+              <option value="3">Alta</option>
+            </select>
+          </label>
+          <button class="primary-btn" type="submit">Adicionar</button>
+        </div>
+      </form>
+
+      <div class="toolbar">
+        <div class="segmented" role="tablist" aria-label="Filtro">
+          <button role="tab" data-filter="all">Todas</button>
+          <button role="tab" data-filter="active">Pendentes</button>
+          <button role="tab" data-filter="done">Concluídas</button>
+        </div>
+        <label class="search">
+          <svg class="ico"><use href="#i-search"/></svg>
+          <input id="search" type="search" placeholder="Buscar" aria-label="Buscar tarefas">
+        </label>
+        <select id="sort" class="sort" aria-label="Ordenar">
+          <option value="manual">Ordem de criação</option>
+          <option value="due">Por data</option>
+          <option value="priority">Por prioridade</option>
+          <option value="alpha">A → Z</option>
+        </select>
+      </div>
+
+      <ul class="tasks" id="tasks" aria-live="polite"></ul>
+
+      <div class="empty" id="empty" hidden>
+        <div class="empty-art" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><use href="#i-check"/></svg>
+        </div>
+        <p class="empty-title" id="empty-title"></p>
+        <p class="empty-text" id="empty-text"></p>
+      </div>
+
+      <div class="bottom-actions">
+        <button class="ghost-btn" id="clear-done-btn" hidden>
+          <svg class="ico"><use href="#i-broom"/></svg><span>Limpar concluídas</span>
+        </button>
+      </div>
+    </main>
+  </div>
+
+  <!-- Editar tarefa -->
+  <dialog id="task-dialog" class="dialog">
+    <form method="dialog" id="task-form">
+      <h2>Editar tarefa</h2>
+      <label class="field">
+        <span>Título</span>
+        <input name="title" type="text" maxlength="200" required>
+      </label>
+      <label class="field">
+        <span>Anotações</span>
+        <textarea name="notes" rows="3" maxlength="2000" placeholder="Detalhes, links, observações…"></textarea>
+      </label>
+      <div class="field-row">
+        <label class="field">
+          <span>Data</span>
+          <input name="due" type="date">
+        </label>
+        <label class="field">
+          <span>Prioridade</span>
+          <select name="priority">
+            <option value="0">Sem prioridade</option>
+            <option value="1">Baixa</option>
+            <option value="2">Média</option>
+            <option value="3">Alta</option>
+          </select>
+        </label>
+      </div>
+      <label class="field">
+        <span>Lista</span>
+        <select name="listId"></select>
+      </label>
+      <div class="dialog-actions">
+        <button type="button" class="ghost-btn danger" id="task-delete-btn">
+          <svg class="ico"><use href="#i-trash"/></svg>Excluir
+        </button>
+        <span class="spacer"></span>
+        <button value="cancel" formnovalidate class="ghost-btn">Cancelar</button>
+        <button value="save" class="primary-btn">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Criar / editar lista -->
+  <dialog id="list-dialog" class="dialog">
+    <form method="dialog" id="list-form">
+      <h2 id="list-dialog-title">Nova lista</h2>
+      <label class="field">
+        <span>Nome</span>
+        <input name="name" type="text" maxlength="60" required placeholder="Ex.: Mercado, Estudos, Viagem">
+      </label>
+      <fieldset class="field">
+        <legend>Cor</legend>
+        <div class="swatches" id="swatches"></div>
+      </fieldset>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button value="cancel" formnovalidate class="ghost-btn">Cancelar</button>
+        <button value="save" class="primary-btn">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite">
+    <span id="toast-msg"></span>
+    <button id="toast-action" hidden></button>
+  </div>
+
+  <script src="js/app.js" defer></script>
+</body>
+</html>
