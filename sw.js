@@ -1,7 +1,7 @@
 /* Service worker: deixa o app disponível offline.
  * Ao alterar qualquer arquivo do app, aumente a versão abaixo
  * para que os usuários recebam a atualização. */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = `tarefas-${VERSION}`;
 const ASSETS = [
   './',

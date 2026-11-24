@@ -55,8 +55,8 @@ function sdSegment(px, py, ax, ay, bx, by) {
 }
 const CHECK = [[143, 266], [225, 348], [379, 172]];
 const STROKE = 23; // metade da espessura (46)
-const C1 = [0x63, 0x66, 0xf1];
-const C2 = [0x43, 0x38, 0xca];
+const C1 = [0x22, 0xc5, 0x5e];
+const C2 = [0x15, 0x80, 0x3d];
 
 /**
  * @param size   tamanho em px

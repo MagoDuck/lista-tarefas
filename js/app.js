@@ -3,7 +3,7 @@
 
   /* ================== Constantes e utilidades ================== */
   const STORAGE_KEY = 'tarefas:v1';
-  const COLORS = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#64748b'];
+  const COLORS = ['#16a34a', '#0ea5e9', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#6366f1', '#64748b'];
   const PRIORITY_LABEL = { 1: 'Baixa', 2: 'Média', 3: 'Alta' };
   const THEMES = ['auto', 'light', 'dark'];
   const THEME_LABEL = { auto: 'automático', light: 'claro', dark: 'escuro' };
@@ -59,6 +59,123 @@
     return node;
   }
 
+  /* ================== Seleção personalizada ==================
+   * Substitui a lista aberta do <select> nativo (que usa o visual do sistema)
+   * por um menu com o mesmo estilo do app. O <select> continua no DOM, escondido,
+   * guardando o valor — então formulários e `select.value` funcionam igual. */
+  const selectValue = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+  let openMenu = null;
+
+  function optionContent(opt) {
+    const parts = [];
+    if (opt.dataset.color) {
+      const ico = svgIcon('i-flag', 'ico opt-ico');
+      ico.style.color = opt.dataset.color;
+      parts.push(ico);
+    } else if (opt.dataset.icon) {
+      parts.push(svgIcon(opt.dataset.icon, 'ico opt-ico'));
+    } else if (opt.dataset.dot) {
+      parts.push(el('span', { class: 'dot', style: `background:${opt.dataset.dot}` }));
+    }
+    parts.push(el('span', { class: 'opt-label', text: opt.textContent }));
+    return parts;
+  }
+
+  function enhanceSelect(select) {
+    const label = select.getAttribute('aria-label') || '';
+    const wrap = el('div', { class: `select ${select.className}`.trim() });
+    const trigger = el('button', { type: 'button', class: 'select-trigger', 'aria-haspopup': 'listbox', 'aria-expanded': 'false' });
+    const menu = el('ul', { class: 'select-menu', role: 'listbox', hidden: true, 'aria-label': label || null });
+    select.className = '';
+    select.hidden = true;
+    select.tabIndex = -1;
+    select.replaceWith(wrap);
+    wrap.append(select, trigger, menu);
+
+    function update() {
+      const opt = select.options[select.selectedIndex];
+      trigger.replaceChildren(...(opt ? optionContent(opt) : []), svgIcon('i-chevron', 'ico chevron'));
+      if (label) trigger.setAttribute('aria-label', `${label}: ${opt ? opt.textContent : ''}`);
+    }
+
+    function open() {
+      if (openMenu && openMenu.close !== close) openMenu.close();
+      menu.replaceChildren(...Array.from(select.options, (opt, i) =>
+        el('li', { class: 'select-option', role: 'option', tabIndex: -1, 'data-index': String(i), 'aria-selected': String(i === select.selectedIndex) },
+          ...optionContent(opt), svgIcon('i-check', 'ico opt-check'))));
+      menu.hidden = false;
+      menu.classList.remove('up', 'right');
+      const r = menu.getBoundingClientRect();
+      if (r.bottom > window.innerHeight - 8 && trigger.getBoundingClientRect().top > r.height + 16) menu.classList.add('up');
+      if (r.right > window.innerWidth - 8) menu.classList.add('right');
+      wrap.classList.add('open');
+      trigger.setAttribute('aria-expanded', 'true');
+      (menu.querySelector('[aria-selected="true"]') || menu.firstElementChild)?.focus({ preventScroll: true });
+      openMenu = { wrap, close };
+    }
+
+    function close(focusTrigger = false) {
+      if (menu.hidden) return;
+      menu.hidden = true;
+      wrap.classList.remove('open');
+      trigger.setAttribute('aria-expanded', 'false');
+      if (openMenu && openMenu.close === close) openMenu = null;
+      if (focusTrigger) trigger.focus();
+    }
+
+    function choose(index) {
+      if (index !== select.selectedIndex) {
+        select.selectedIndex = index;
+        update();
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      close(true);
+    }
+
+    // `select.value = x` no código também atualiza o botão.
+    Object.defineProperty(select, 'value', {
+      configurable: true,
+      get() { return selectValue.get.call(this); },
+      set(v) { selectValue.set.call(this, v); update(); },
+    });
+
+    trigger.addEventListener('click', () => (menu.hidden ? open() : close()));
+    trigger.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); open(); }
+    });
+    menu.addEventListener('click', (e) => {
+      const li = e.target.closest('.select-option');
+      if (li) choose(Number(li.dataset.index));
+    });
+    menu.addEventListener('pointermove', (e) => {
+      const li = e.target.closest('.select-option');
+      if (li && document.activeElement !== li) li.focus({ preventScroll: true });
+    });
+    menu.addEventListener('keydown', (e) => {
+      const items = Array.from(menu.children);
+      const i = items.indexOf(document.activeElement);
+      const go = (n) => items[(n + items.length) % items.length]?.focus();
+      switch (e.key) {
+        case 'ArrowDown': go(i + 1); break;
+        case 'ArrowUp': go(i - 1); break;
+        case 'Home': go(0); break;
+        case 'End': go(items.length - 1); break;
+        case 'Enter': case ' ': if (i >= 0) choose(i); break;
+        case 'Escape': close(true); e.stopPropagation(); break;
+        case 'Tab': close(); return;
+        default: return;
+      }
+      e.preventDefault();
+    });
+
+    update();
+  }
+
+  document.addEventListener('pointerdown', (e) => {
+    if (openMenu && !openMenu.wrap.contains(e.target)) openMenu.close();
+  });
+  $$('select').forEach(enhanceSelect);
+
   /* ================== Estado ================== */
   function makeTask(listId, title, extra = {}) {
     return {
@@ -100,7 +217,7 @@
   function sanitize(s) {
     const listIds = new Set(s.lists.map((l) => l.id));
     const clean = {
-      lists: s.lists.map((l) => ({ id: l.id, name: String(l.name).slice(0, 60), color: COLORS.includes(l.color) ? l.color : COLORS[0] })),
+      lists: s.lists.map((l) => ({ id: l.id, name: String(l.name).slice(0, 60), color: /^#[0-9a-f]{6}$/i.test(l.color) ? l.color : COLORS[0] })),
       tasks: s.tasks.filter((t) => listIds.has(t.listId)).map((t) => ({
         id: t.id,
         listId: t.listId,
@@ -349,7 +466,7 @@
     els.themeBtn.querySelector('use').setAttribute('href', '#' + THEME_ICON[t]);
     els.themeBtn.querySelector('span').textContent = `Tema: ${THEME_LABEL[t]}`;
     const dark = t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
-    $('meta[name="theme-color"]').setAttribute('content', dark ? '#171a2d' : '#4f46e5');
+    $('meta[name="theme-color"]').setAttribute('content', dark ? '#151c19' : '#15803d');
   }
 
   /* ================== Toast ================== */
@@ -422,7 +539,7 @@
     f.notes.value = t.notes;
     f.due.value = t.due;
     f.priority.value = String(t.priority);
-    f.listId.replaceChildren(...state.lists.map((l) => el('option', { value: l.id, text: l.name })));
+    f.listId.replaceChildren(...state.lists.map((l) => el('option', { value: l.id, text: l.name, 'data-dot': l.color })));
     f.listId.value = t.listId;
     taskDialog.showModal();
   }

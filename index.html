@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Tarefas</title>
   <meta name="description" content="Crie listas de coisas para fazer. Funciona offline e pode ser instalado como app.">
-  <meta name="theme-color" content="#4f46e5">
+  <meta name="theme-color" content="#15803d">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -26,7 +26,10 @@
   <!-- Ícones -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
-    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-sort" viewBox="0 0 24 24"><path d="M4 7h16M4 12h11M4 17h6"/></symbol>
+    <symbol id="i-az" viewBox="0 0 24 24"><path d="M3 18l3.5-10L10 18M4.3 15h4.4M13 8h7l-7 10h7"/></symbol>
+    <symbol id="i-chevron"viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-plus"viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></symbol>
     <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></symbol>
@@ -118,15 +121,12 @@
             <svg class="ico"><use href="#i-calendar"/></svg>
             <input id="new-due" type="date" aria-label="Data">
           </label>
-          <label class="chip-input" title="Prioridade">
-            <svg class="ico"><use href="#i-flag"/></svg>
-            <select id="new-priority" aria-label="Prioridade">
-              <option value="0">Sem prioridade</option>
-              <option value="1">Baixa</option>
-              <option value="2">Média</option>
-              <option value="3">Alta</option>
-            </select>
-          </label>
+          <select id="new-priority" class="chip-select" aria-label="Prioridade">
+            <option value="0" data-color="var(--muted)">Sem prioridade</option>
+            <option value="1" data-color="var(--p1)">Baixa</option>
+            <option value="2" data-color="var(--p2)">Média</option>
+            <option value="3" data-color="var(--p3)">Alta</option>
+          </select>
           <button class="primary-btn" type="submit">Adicionar</button>
         </div>
       </form>
@@ -142,10 +142,10 @@
           <input id="search" type="search" placeholder="Buscar" aria-label="Buscar tarefas">
         </label>
         <select id="sort" class="sort" aria-label="Ordenar">
-          <option value="manual">Ordem de criação</option>
-          <option value="due">Por data</option>
-          <option value="priority">Por prioridade</option>
-          <option value="alpha">A → Z</option>
+          <option value="manual" data-icon="i-sort">Ordem de criação</option>
+          <option value="due" data-icon="i-calendar">Por data</option>
+          <option value="priority" data-icon="i-flag">Por prioridade</option>
+          <option value="alpha" data-icon="i-az">A → Z</option>
         </select>
       </div>
 
@@ -184,20 +184,20 @@
           <span>Data</span>
           <input name="due" type="date">
         </label>
-        <label class="field">
+        <div class="field">
           <span>Prioridade</span>
-          <select name="priority">
-            <option value="0">Sem prioridade</option>
-            <option value="1">Baixa</option>
-            <option value="2">Média</option>
-            <option value="3">Alta</option>
+          <select name="priority" aria-label="Prioridade">
+            <option value="0" data-color="var(--muted)">Sem prioridade</option>
+            <option value="1" data-color="var(--p1)">Baixa</option>
+            <option value="2" data-color="var(--p2)">Média</option>
+            <option value="3" data-color="var(--p3)">Alta</option>
           </select>
-        </label>
+        </div>
       </div>
-      <label class="field">
+      <div class="field">
         <span>Lista</span>
-        <select name="listId"></select>
-      </label>
+        <select name="listId" aria-label="Lista"></select>
+      </div>
       <div class="dialog-actions">
         <button type="button" class="ghost-btn danger" id="task-delete-btn">
           <svg class="ico"><use href="#i-trash"/></svg>Excluir
